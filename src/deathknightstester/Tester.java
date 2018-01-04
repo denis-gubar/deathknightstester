@@ -128,113 +128,21 @@ public class Tester
 	private void generate_test_code()
 	{
 		StringBuffer code = new StringBuffer();
-		code.append("private:\n");
-		// Generate the vector output function
-		code.append("    template<typename T> string print_array( const vector<T>& v )\n" );
-		code.append("    {\n");
-		code.append("        ostringstream os; os << \"{ \";\n");
-		code.append("        for (const auto& x : v)\n");
-		code.append("            os << '\\\"' << x << \"\\\",\";\n");
-		code.append("        os << \" }\";\n");
-		code.append("        return os.str();\n");
-		code.append("    }\n");
-		// Generate the verification function
-		generate_verification_code(code);
-		code.append("public:\n");
-		/*
-		 * Generate the test wrapper function that can call either all or individual test cases.
-		 * (-1 for all)
-		 */
-		generate_run_tests_code(code);
-		// Insert the cut tags
-		code.insert(0, BEGINCUT + "\n");
-		code.append(ENDCUT);
-		tags.put(TESTCODE, code.toString());
-	}
-	/**
-	 * This method will generate the code for verifying test cases.
-	 * 
-	 * @param code
-	 */
-	private void generate_verification_code(StringBuffer code)
-	{
-		code.append("    template<typename T> void verify_case( int Case, const vector<T>& expected, const vector<T>& received )\n");
-		code.append("    {\n");
-		code.append("        cerr << \"Test Case #\" << Case << \"...\";\n");
-		code.append("        if (expected == received)\n");
-		code.append("            cerr << \"PASSED. \"; \n");
-		code.append("        else\n");
-		code.append("        {\n");
-		code.append("            cerr << \"FAILED.\" << endl;\n");
-		code.append("            cerr << \"\\tExpected: \" << print_array( expected ) << endl;\n");
-		code.append("            cerr << \"\\tReceived: \" << print_array( received ) << endl;\n");
-		code.append("        }\n");
-		code.append("    }\n");
-		code.append("    template<typename T> void verify_case( int Case, const T& expected, const T& received )\n");
-		code.append("    {\n");
-		code.append("        cerr << \"Test Case #\" << Case << \"...\";\n");
-		code.append("        if (expected == received) \n");
-		code.append("            cerr << \"PASSED. \"; \n");
-		code.append("        else\n");
-		code.append("        {\n");
-		code.append("            cerr << \"FAILED.\" << endl;\n");
-		code.append("            cerr << \"\\tExpected: \\\"\" << expected << '\\\"' << endl;\n");
-		code.append("            cerr << \"\\tReceived: \\\"\" << received << '\\\"' << endl;\n");
-		code.append("        }    \n");
-		code.append("    }\n");
-	}
-	/**
-	 * Generate the test wrapper function that can call either all or individual test cases.
-     * (-1 for all)
-	 * 
-	 * @param code
-	 */
-	private void generate_run_tests_code(StringBuffer code)
-	{
 		DataType[] paramtypes = problemModel.getParamTypes();
 		DataType returntype = problemModel.getReturnType();
 		TestCase[] cases = problemModel.getTestCases();
 		String[] paramnames = problemModel.getParamNames();
 		
-		code.append("    void run_test( int Case = -1 )\n"); 
-		code.append("    {\n");
-		for (int i = 0; i < paramtypes.length; ++i)
-		{
-			code.append("        vector<");
-			code.append(paramtypes[i].getDescriptor(language));
-			code.append("> A");
-			code.append(i);
-			code.append(";\n");
-		}
-		code.append("        vector<");
-		code.append(returntype.getDescriptor(language));
-		code.append("> A");
-		code.append(paramtypes.length);
-		code.append(";\n");
 		// Generate the individual test cases
 		for (int i = 0; i < cases.length; ++i)
-			generate_test_case(i, code, paramtypes, paramnames, returntype, cases[i]);
-		// Check which case should be called
-		code.append("        for (int i = 0; i < A0.size(); ++i)\n"); 
-		code.append("            if (Case == -1 || i == Case)\n"); 
-		code.append("            {\n"); 
-		code.append("                boost::chrono::high_resolution_clock::time_point start = boost::chrono::high_resolution_clock::now();\n"); 
-		code.append("                verify_case( i, A");
-		code.append(paramtypes.length);
-		code.append("[i], ");
-		code.append(problemModel.getMethodName());
-		code.append("( ");
-		for (int i = 0; i < paramtypes.length; ++i)
-		{
-			code.append("A" + i + "[i]");
-			if (i < paramtypes.length - 1)
-				code.append(", ");
-		}
-		code.append(") );\n");		
-		code.append("                boost::chrono::high_resolution_clock::time_point finish = boost::chrono::high_resolution_clock::now();\n"); 
-		code.append("                cout << \"Elapsed \" << boost::chrono::round<boost::chrono::milliseconds>( finish - start ) << endl;\n"); 
-		code.append("            }\n"); 
-		code.append("    }\n"); 
+			generate_test_case("Test" + i, code, paramtypes, paramnames, returntype, cases[i]);
+
+		// Generate template for custom test case
+		generate_test_case("MyTest", code, paramtypes, paramnames, returntype, cases[0]);
+		// Insert the cut tags
+		code.insert(0, BEGINCUT + "\n");
+		code.append(ENDCUT);
+		tags.put(TESTCODE, code.toString());
 	}
 	/**
 	 * This method will generate the code for one test case.
@@ -246,7 +154,7 @@ public class Tester
 	 * @param testcase
 	 */
 	private void generate_test_case(
-		int index,
+		String TestName,
 		StringBuffer code,
 		DataType[] paramtypes,
 		String[] paramnames,
@@ -259,13 +167,33 @@ public class Tester
 		 * Generate code for setting up individual test cases and calling the method with these
 		 * parameters.
 		 */
-		code.append("        { /* Test " + index + " */ ");
+		code.append("TEST( TopCoderMain, ");
+		code.append(TestName);
+		code.append(" )\n"); 
+		code.append("{\n");
+		code.append("    ");
+		code.append(problemModel.getClassName());
+		code.append(" ___test;\n");
 		// Generate each input variable separately
 		for (int i = 0; i < inputs.length; ++i)
-			generate_parameter(i, code, paramtypes[i], paramnames[i], inputs[i]);
+			generate_parameter(code, paramtypes[i], "_" + paramnames[i], inputs[i]);
 		// Generate the output variable as the last variable
-		generate_parameter(inputs.length, code, returntype, "result", output);
+		generate_parameter(code, returntype, "expected_result", output);
+		code.append("    TEST_TIMEOUT_BEGIN\n");
+		code.append("        EXPECT_EQ( expected_result, ___test.");
+		code.append(problemModel.getMethodName());
+		code.append("( ");
+		for (int i = 0; i < inputs.length; ++i)
+		{
+			code.append("_" + paramnames[i]);
+			if ( i + 1 < inputs.length )
+				code.append(",");
+			code.append(" ");
+		}
+		code.append(") );\n");
+		code.append("    TEST_TIMEOUT_FAIL_END( 2000 )\n");
 		code.append("}\n");
+		code.append("\n");		
 	}
 	/**
 	 * This method will generate the required parameter as a unique variable.
@@ -275,16 +203,15 @@ public class Tester
 	 * @param paramtype
 	 * @param input
 	 */
-	private void generate_parameter(int index, StringBuffer code, DataType paramtype, String paramname, String input)
+	private void generate_parameter(StringBuffer code, DataType paramtype, String paramname, String input)
 	{
 		String typename = paramtype.getDescriptor(language);
+		code.append("    ");
 		code.append(typename);
 		code.append(" "); 
 		code.append(paramname);
-		code.append(" = \n");
-		code.append("        ");
+		code.append(" = ");
 		code.append(input);
-		code.append("\n        ; ");
-		code.append("A" + index + ".push_back( " + paramname + " ); ");
+		code.append(";\n");
 	}
 }
